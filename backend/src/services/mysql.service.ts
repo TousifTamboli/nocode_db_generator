@@ -7,6 +7,22 @@ interface MySQLConfig {
   password: string;
 }
 
+interface Column {
+  id: string;
+  name: string;
+  type: string;
+  isPrimaryKey: boolean;
+  isNullable: boolean;
+  defaultValue?: string;
+}
+
+interface Table {
+  id: string;
+  name: string;
+  position: { x: number; y: number };
+  columns: Column[];
+}
+
 // Test MySQL connection
 export const testMySQLConnection = async (config: MySQLConfig): Promise<{ success: boolean; message: string }> => {
   try {
@@ -111,3 +127,118 @@ export const executeMySQLQuery = async (
     return { success: false, message: err.message };
   }
 };
+
+// Generate CREATE TABLE SQL from table definition
+const generateCreateTableSQL = (table: Table): string => {
+  const safeName = table.name.replace(/[^a-zA-Z0-9_]/g, '_');
+  
+  if (table.columns.length === 0) {
+    // MySQL requires at least one column, so create with a placeholder
+    return `CREATE TABLE IF NOT EXISTS \`${safeName}\` (
+      \`_placeholder\` INT COMMENT 'Placeholder column - add columns to replace'
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`;
+  }
+
+  const columnDefs = table.columns.map(col => {
+    const colName = col.name.replace(/[^a-zA-Z0-9_]/g, '_');
+    let def = `\`${colName}\` ${col.type}`;
+    
+    if (!col.isNullable) {
+      def += ' NOT NULL';
+    }
+    
+    if (col.defaultValue) {
+      // Handle special defaults
+      if (col.defaultValue.toUpperCase() === 'NULL') {
+        def += ' DEFAULT NULL';
+      } else if (col.defaultValue.toUpperCase() === 'CURRENT_TIMESTAMP') {
+        def += ' DEFAULT CURRENT_TIMESTAMP';
+      } else {
+        def += ` DEFAULT '${col.defaultValue.replace(/'/g, "''")}'`;
+      }
+    }
+    
+    if (col.isPrimaryKey) {
+      def += ' PRIMARY KEY';
+      // Add AUTO_INCREMENT for INT primary keys
+      if (col.type.toUpperCase().includes('INT')) {
+        def += ' AUTO_INCREMENT';
+      }
+    }
+    
+    return def;
+  }).join(',\n  ');
+
+  return `CREATE TABLE IF NOT EXISTS \`${safeName}\` (
+  ${columnDefs}
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`;
+};
+
+// Sync schema to MySQL - creates/updates tables
+export const syncSchemaToMySQL = async (
+  config: MySQLConfig,
+  databaseName: string,
+  tables: Table[]
+): Promise<{ success: boolean; message: string; details?: string[] }> => {
+  const details: string[] = [];
+  
+  try {
+    const connection = await mysql.createConnection({
+      host: config.host,
+      port: config.port,
+      user: config.user,
+      password: config.password,
+      database: databaseName,
+    });
+
+    // Get existing tables from MySQL
+    const [existingTablesResult] = await connection.query('SHOW TABLES');
+    const existingTables = (existingTablesResult as Array<Record<string, string>>).map(
+      row => Object.values(row)[0]
+    );
+
+    // Get table names from schema
+    const schemaTableNames = tables.map(t => t.name.replace(/[^a-zA-Z0-9_]/g, '_'));
+
+    // Drop tables that no longer exist in schema
+    for (const existingTable of existingTables) {
+      if (!schemaTableNames.includes(existingTable)) {
+        await connection.query(`DROP TABLE IF EXISTS \`${existingTable}\``);
+        details.push(`Dropped table: ${existingTable}`);
+      }
+    }
+
+    // Create or update tables
+    for (const table of tables) {
+      const safeName = table.name.replace(/[^a-zA-Z0-9_]/g, '_');
+      
+      if (existingTables.includes(safeName)) {
+        // Table exists - recreate it (drop and create for simplicity)
+        // In production, you'd want to use ALTER TABLE for better handling
+        await connection.query(`DROP TABLE IF EXISTS \`${safeName}\``);
+        details.push(`Recreating table: ${safeName}`);
+      }
+      
+      // Create the table
+      const createSQL = generateCreateTableSQL(table);
+      await connection.query(createSQL);
+      details.push(`Created table: ${safeName} with ${table.columns.length} columns`);
+    }
+
+    await connection.end();
+
+    return {
+      success: true,
+      message: `Synced ${tables.length} tables to MySQL`,
+      details,
+    };
+  } catch (error) {
+    const err = error as Error;
+    return {
+      success: false,
+      message: `MySQL sync failed: ${err.message}`,
+      details,
+    };
+  }
+};
+

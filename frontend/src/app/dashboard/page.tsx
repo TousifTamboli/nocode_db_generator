@@ -164,8 +164,7 @@ export default function DashboardPage() {
                   size="sm"
                   className="bg-purple-600 hover:bg-purple-500 text-white text-xs"
                   onClick={() => {
-                    // TODO: Navigate to workspace
-                    toast.info("Workspace coming soon!");
+                    router.push(`/workspace/${project.id}`);
                   }}
                 >
                   Open

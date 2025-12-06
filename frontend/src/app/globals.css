@@ -120,3 +120,56 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* React Flow Dark Theme Styles */
+.react-flow__controls {
+  background: #18181b !important;
+  border: 1px solid #3f3f46 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3) !important;
+}
+
+.react-flow__controls-button {
+  background: #18181b !important;
+  border-color: #3f3f46 !important;
+  color: #a1a1aa !important;
+  fill: #a1a1aa !important;
+}
+
+.react-flow__controls-button:hover {
+  background: #27272a !important;
+  color: #ffffff !important;
+  fill: #ffffff !important;
+}
+
+.react-flow__controls-button svg {
+  fill: currentColor !important;
+}
+
+/* MiniMap Dark Theme */
+.react-flow__minimap {
+  background: #18181b !important;
+  border: 1px solid #3f3f46 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3) !important;
+}
+
+.react-flow__minimap-mask {
+  fill: rgba(0, 0, 0, 0.7) !important;
+}
+
+.react-flow__minimap-node {
+  fill: #3b82f6 !important;
+  stroke: none !important;
+}
+
+/* Panel styling */
+.react-flow__panel {
+  margin: 12px !important;
+}
+
+/* Attribution (hidden) */
+.react-flow__attribution {
+  display: none !important;
+}
+

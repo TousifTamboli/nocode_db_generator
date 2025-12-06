@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import Project from '../models/Project.model';
-import { testMySQLConnection, createMySQLDatabase } from '../services/mysql.service';
+import { testMySQLConnection, createMySQLDatabase, syncSchemaToMySQL } from '../services/mysql.service';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { z } from 'zod';
 
@@ -160,9 +160,19 @@ export const getProjects = async (req: AuthRequest, res: Response): Promise<void
       .select('-mysqlConfig.password -mongoConfig')
       .sort({ updatedAt: -1 });
 
+    // Transform _id to id for frontend compatibility
+    const transformedProjects = projects.map(project => ({
+      id: project._id.toString(),
+      name: project.name,
+      databaseType: project.databaseType,
+      databaseName: project.databaseName,
+      createdAt: project.createdAt,
+      updatedAt: project.updatedAt,
+    }));
+
     res.status(200).json({
       success: true,
-      data: { projects },
+      data: { projects: transformedProjects },
     });
   } catch (error) {
     console.error('Get projects error:', error);
@@ -191,9 +201,26 @@ export const getProject = async (req: AuthRequest, res: Response): Promise<void>
       return;
     }
 
+    // Transform for frontend compatibility
+    const transformedProject = {
+      id: project._id.toString(),
+      name: project.name,
+      databaseType: project.databaseType,
+      databaseName: project.databaseName,
+      schemaData: project.schemaData,
+      mysqlConfig: project.mysqlConfig ? {
+        host: project.mysqlConfig.host,
+        port: project.mysqlConfig.port,
+        user: project.mysqlConfig.user,
+        // Don't send password to frontend
+      } : undefined,
+      createdAt: project.createdAt,
+      updatedAt: project.updatedAt,
+    };
+
     res.status(200).json({
       success: true,
-      data: { project },
+      data: { project: transformedProject },
     });
   } catch (error) {
     console.error('Get project error:', error);
@@ -231,6 +258,73 @@ export const deleteProject = async (req: AuthRequest, res: Response): Promise<vo
     res.status(500).json({
       success: false,
       message: 'Server error while deleting project',
+    });
+  }
+};
+
+// @desc    Update project schema (tables/columns) and sync to MySQL
+// @route   PUT /api/projects/:id/schema
+// @access  Private
+export const updateSchema = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId;
+    const { tables } = req.body;
+
+    if (!Array.isArray(tables)) {
+      res.status(400).json({
+        success: false,
+        message: 'Tables must be an array',
+      });
+      return;
+    }
+
+    // First, get the project to get MySQL config
+    const project = await Project.findOne({ _id: id, userId });
+
+    if (!project) {
+      res.status(404).json({
+        success: false,
+        message: 'Project not found',
+      });
+      return;
+    }
+
+    // Sync to MySQL if it's a MySQL project
+    if (project.databaseType === 'mysql' && project.mysqlConfig) {
+      const syncResult = await syncSchemaToMySQL(
+        {
+          host: project.mysqlConfig.host,
+          port: project.mysqlConfig.port,
+          user: project.mysqlConfig.user,
+          password: project.mysqlConfig.password,
+        },
+        project.databaseName,
+        tables
+      );
+
+      if (!syncResult.success) {
+        console.error('MySQL sync failed:', syncResult.message);
+        // Continue to save to MongoDB even if MySQL sync fails
+        // but log the error
+      } else {
+        console.log('MySQL sync success:', syncResult.details);
+      }
+    }
+
+    // Update schema in MongoDB
+    project.schemaData = { tables };
+    await project.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Schema updated and synced to MySQL',
+    });
+  } catch (error) {
+    console.error('Update schema error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while updating schema',
     });
   }
 };

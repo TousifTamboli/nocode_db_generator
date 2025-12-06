@@ -5,6 +5,7 @@ import {
   getProject,
   deleteProject,
   testMySQLConnectionEndpoint,
+  updateSchema,
 } from '../controllers/project.controller';
 import { authenticate } from '../middleware/auth.middleware';
 
@@ -22,4 +23,8 @@ router.get('/', getProjects);
 router.get('/:id', getProject);
 router.delete('/:id', deleteProject);
 
+// Schema management
+router.put('/:id/schema', updateSchema);
+
 export default router;
+

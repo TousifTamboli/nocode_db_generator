@@ -31,32 +31,29 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
 import { Column } from "@/stores/workspace-store";
 
 // MySQL data types
 const MYSQL_TYPES = [
-  // Numeric
   { value: "INT", label: "INT" },
   { value: "BIGINT", label: "BIGINT" },
   { value: "SMALLINT", label: "SMALLINT" },
   { value: "TINYINT", label: "TINYINT" },
-  { value: "DECIMAL", label: "DECIMAL" },
+  { value: "DECIMAL(10,2)", label: "DECIMAL(10,2)" },
   { value: "FLOAT", label: "FLOAT" },
   { value: "DOUBLE", label: "DOUBLE" },
-  // String
   { value: "VARCHAR(255)", label: "VARCHAR(255)" },
   { value: "VARCHAR(100)", label: "VARCHAR(100)" },
   { value: "VARCHAR(50)", label: "VARCHAR(50)" },
+  { value: "CHAR(36)", label: "CHAR(36) - UUID" },
   { value: "TEXT", label: "TEXT" },
   { value: "LONGTEXT", label: "LONGTEXT" },
-  { value: "CHAR(1)", label: "CHAR(1)" },
-  // Date/Time
   { value: "DATE", label: "DATE" },
   { value: "DATETIME", label: "DATETIME" },
   { value: "TIMESTAMP", label: "TIMESTAMP" },
   { value: "TIME", label: "TIME" },
-  // Other
   { value: "BOOLEAN", label: "BOOLEAN" },
   { value: "JSON", label: "JSON" },
   { value: "BLOB", label: "BLOB" },
@@ -71,7 +68,10 @@ const editColumnSchema = z.object({
   type: z.string().min(1, "Data type is required"),
   isPrimaryKey: z.boolean().default(false),
   isNullable: z.boolean().default(true),
+  isUnique: z.boolean().default(false),
+  isAutoIncrement: z.boolean().default(false),
   defaultValue: z.string().optional(),
+  checkConstraint: z.string().optional(),
 });
 
 type EditColumnFormValues = z.infer<typeof editColumnSchema>;
@@ -92,9 +92,14 @@ export function EditColumnDialog({ isOpen, onClose, onConfirm, column, tableName
       type: "",
       isPrimaryKey: false,
       isNullable: true,
+      isUnique: false,
+      isAutoIncrement: false,
       defaultValue: "",
+      checkConstraint: "",
     },
   });
+
+  const selectedType = form.watch("type");
 
   // Reset form when dialog opens with column data
   useEffect(() => {
@@ -104,7 +109,10 @@ export function EditColumnDialog({ isOpen, onClose, onConfirm, column, tableName
         type: column.type,
         isPrimaryKey: column.isPrimaryKey,
         isNullable: column.isNullable,
+        isUnique: column.isUnique || false,
+        isAutoIncrement: column.isAutoIncrement || false,
         defaultValue: column.defaultValue || "",
+        checkConstraint: column.checkConstraint || "",
       });
     }
   }, [isOpen, column, form]);
@@ -115,7 +123,10 @@ export function EditColumnDialog({ isOpen, onClose, onConfirm, column, tableName
       type: values.type,
       isPrimaryKey: values.isPrimaryKey,
       isNullable: values.isNullable,
+      isUnique: values.isUnique,
+      isAutoIncrement: values.isAutoIncrement,
       defaultValue: values.defaultValue || undefined,
+      checkConstraint: values.checkConstraint || undefined,
     });
   };
 
@@ -123,7 +134,7 @@ export function EditColumnDialog({ isOpen, onClose, onConfirm, column, tableName
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[450px] bg-zinc-900 border-zinc-800 text-white">
+      <DialogContent className="sm:max-w-[500px] bg-zinc-900 border-zinc-800 text-white max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
@@ -172,7 +183,7 @@ export function EditColumnDialog({ isOpen, onClose, onConfirm, column, tableName
                           <SelectValue placeholder="Select type" />
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent className="bg-zinc-800 border-zinc-700">
+                      <SelectContent className="bg-zinc-800 border-zinc-700 max-h-[200px]">
                         {MYSQL_TYPES.map((type) => (
                           <SelectItem
                             key={type.value}
@@ -200,7 +211,7 @@ export function EditColumnDialog({ isOpen, onClose, onConfirm, column, tableName
                   </FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="NULL"
+                      placeholder="NULL, CURRENT_TIMESTAMP, or value"
                       className="bg-zinc-800 border-zinc-700 text-white"
                       {...field}
                     />
@@ -210,45 +221,113 @@ export function EditColumnDialog({ isOpen, onClose, onConfirm, column, tableName
               )}
             />
 
-            <div className="flex gap-6">
-              <FormField
-                control={form.control}
-                name="isPrimaryKey"
-                render={({ field }) => (
-                  <FormItem className="flex items-center gap-2 space-y-0">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        className="border-zinc-600 data-[state=checked]:bg-yellow-500 data-[state=checked]:border-yellow-500"
-                      />
-                    </FormControl>
-                    <FormLabel className="text-zinc-300 text-sm font-normal cursor-pointer">
-                      Primary Key
-                    </FormLabel>
-                  </FormItem>
-                )}
-              />
+            {/* Constraints Section */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium text-zinc-400">Constraints</h4>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="isPrimaryKey"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center gap-2 space-y-0 p-3 rounded-lg bg-zinc-800/50 border border-zinc-800">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          className="border-zinc-600 data-[state=checked]:bg-yellow-500 data-[state=checked]:border-yellow-500"
+                        />
+                      </FormControl>
+                      <FormLabel className="text-zinc-300 text-sm font-normal cursor-pointer">
+                        🔑 Primary Key
+                      </FormLabel>
+                    </FormItem>
+                  )}
+                />
 
-              <FormField
-                control={form.control}
-                name="isNullable"
-                render={({ field }) => (
-                  <FormItem className="flex items-center gap-2 space-y-0">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        className="border-zinc-600 data-[state=checked]:bg-purple-500 data-[state=checked]:border-purple-500"
-                      />
-                    </FormControl>
-                    <FormLabel className="text-zinc-300 text-sm font-normal cursor-pointer">
-                      Nullable
-                    </FormLabel>
-                  </FormItem>
-                )}
-              />
+                <FormField
+                  control={form.control}
+                  name="isUnique"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center gap-2 space-y-0 p-3 rounded-lg bg-zinc-800/50 border border-zinc-800">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          className="border-zinc-600 data-[state=checked]:bg-blue-500 data-[state=checked]:border-blue-500"
+                        />
+                      </FormControl>
+                      <FormLabel className="text-zinc-300 text-sm font-normal cursor-pointer">
+                        Unique
+                      </FormLabel>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="isNullable"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center gap-2 space-y-0 p-3 rounded-lg bg-zinc-800/50 border border-zinc-800">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          className="border-zinc-600 data-[state=checked]:bg-purple-500 data-[state=checked]:border-purple-500"
+                        />
+                      </FormControl>
+                      <FormLabel className="text-zinc-300 text-sm font-normal cursor-pointer">
+                        Nullable
+                      </FormLabel>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="isAutoIncrement"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center gap-2 space-y-0 p-3 rounded-lg bg-zinc-800/50 border border-zinc-800">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          disabled={!selectedType?.includes("INT")}
+                          className="border-zinc-600 data-[state=checked]:bg-green-500 data-[state=checked]:border-green-500 disabled:opacity-50"
+                        />
+                      </FormControl>
+                      <FormLabel className={`text-sm font-normal cursor-pointer ${!selectedType?.includes("INT") ? "text-zinc-500" : "text-zinc-300"}`}>
+                        Auto Increment
+                      </FormLabel>
+                    </FormItem>
+                  )}
+                />
+              </div>
             </div>
+
+            {/* Check Constraint */}
+            <FormField
+              control={form.control}
+              name="checkConstraint"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-zinc-300">
+                    Check Constraint <span className="text-zinc-500">(optional)</span>
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="e.g., age >= 18, status IN ('active', 'inactive')"
+                      className="bg-zinc-800 border-zinc-700 text-white"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription className="text-zinc-500 text-xs">
+                    MySQL 8.0+ constraint expression
+                  </FormDescription>
+                  <FormMessage className="text-red-400 text-xs" />
+                </FormItem>
+              )}
+            />
 
             <DialogFooter className="gap-2">
               <Button

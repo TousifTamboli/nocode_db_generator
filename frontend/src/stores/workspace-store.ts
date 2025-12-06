@@ -8,7 +8,10 @@ export interface Column {
   type: string;
   isPrimaryKey: boolean;
   isNullable: boolean;
+  isUnique: boolean;
+  isAutoIncrement: boolean;
   defaultValue?: string;
+  checkConstraint?: string; // e.g., "age >= 18"
 }
 
 export interface Table {

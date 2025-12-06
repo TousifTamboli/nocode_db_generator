@@ -13,7 +13,10 @@ interface Column {
   type: string;
   isPrimaryKey: boolean;
   isNullable: boolean;
+  isUnique?: boolean;
+  isAutoIncrement?: boolean;
   defaultValue?: string;
+  checkConstraint?: string;
 }
 
 interface Table {
@@ -139,38 +142,60 @@ const generateCreateTableSQL = (table: Table): string => {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`;
   }
 
-  const columnDefs = table.columns.map(col => {
+  const columnDefs: string[] = [];
+  const constraints: string[] = [];
+
+  table.columns.forEach(col => {
     const colName = col.name.replace(/[^a-zA-Z0-9_]/g, '_');
     let def = `\`${colName}\` ${col.type}`;
     
+    // NOT NULL constraint
     if (!col.isNullable) {
       def += ' NOT NULL';
     }
     
-    if (col.defaultValue) {
-      // Handle special defaults
-      if (col.defaultValue.toUpperCase() === 'NULL') {
+    // AUTO_INCREMENT (only for INT types)
+    if (col.isAutoIncrement && col.type.toUpperCase().includes('INT')) {
+      def += ' AUTO_INCREMENT';
+    }
+    
+    // DEFAULT value
+    if (col.defaultValue && !col.isAutoIncrement) {
+      const upperDefault = col.defaultValue.toUpperCase().trim();
+      if (upperDefault === 'NULL') {
         def += ' DEFAULT NULL';
-      } else if (col.defaultValue.toUpperCase() === 'CURRENT_TIMESTAMP') {
+      } else if (upperDefault === 'CURRENT_TIMESTAMP') {
         def += ' DEFAULT CURRENT_TIMESTAMP';
+      } else if (upperDefault === 'CURRENT_DATE') {
+        def += ' DEFAULT (CURRENT_DATE)';
       } else {
         def += ` DEFAULT '${col.defaultValue.replace(/'/g, "''")}'`;
       }
     }
     
-    if (col.isPrimaryKey) {
-      def += ' PRIMARY KEY';
-      // Add AUTO_INCREMENT for INT primary keys
-      if (col.type.toUpperCase().includes('INT')) {
-        def += ' AUTO_INCREMENT';
-      }
+    // UNIQUE constraint (inline for single column)
+    if (col.isUnique && !col.isPrimaryKey) {
+      def += ' UNIQUE';
     }
     
-    return def;
-  }).join(',\n  ');
+    columnDefs.push(def);
+    
+    // PRIMARY KEY constraint
+    if (col.isPrimaryKey) {
+      constraints.push(`PRIMARY KEY (\`${colName}\`)`);
+    }
+    
+    // CHECK constraint (MySQL 8.0+)
+    if (col.checkConstraint) {
+      const constraintName = `chk_${safeName}_${colName}`;
+      constraints.push(`CONSTRAINT \`${constraintName}\` CHECK (${col.checkConstraint})`);
+    }
+  });
+
+  const allDefs = [...columnDefs, ...constraints].join(',\n  ');
 
   return `CREATE TABLE IF NOT EXISTS \`${safeName}\` (
-  ${columnDefs}
+  ${allDefs}
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`;
 };
 

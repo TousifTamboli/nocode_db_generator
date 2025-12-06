@@ -118,9 +118,18 @@ function ColumnRow({
             <span className="text-xs text-zinc-500">{column.type}</span>
           </div>
           
-          {!column.isNullable && (
-            <span className="text-[10px] text-red-400 opacity-70">NN</span>
-          )}
+          {/* Constraint badges */}
+          <div className="flex items-center gap-1">
+            {column.isUnique && !column.isPrimaryKey && (
+              <span className="text-[9px] px-1 py-0.5 rounded bg-blue-500/20 text-blue-400">UQ</span>
+            )}
+            {column.isAutoIncrement && (
+              <span className="text-[9px] px-1 py-0.5 rounded bg-green-500/20 text-green-400">AI</span>
+            )}
+            {!column.isNullable && (
+              <span className="text-[9px] px-1 py-0.5 rounded bg-red-500/20 text-red-400">NN</span>
+            )}
+          </div>
           
           {/* Edit button - visible on hover */}
           <Button

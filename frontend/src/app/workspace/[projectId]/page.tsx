@@ -32,7 +32,10 @@ interface ProjectData {
         type: string;
         isPrimaryKey: boolean;
         isNullable: boolean;
+        isUnique: boolean;
+        isAutoIncrement: boolean;
         defaultValue?: string;
+        checkConstraint?: string;
       }>;
     }>;
   };
@@ -148,7 +151,10 @@ export default function WorkspacePage() {
     type: string;
     isPrimaryKey: boolean;
     isNullable: boolean;
+    isUnique: boolean;
+    isAutoIncrement: boolean;
     defaultValue?: string;
+    checkConstraint?: string;
   }) => {
     if (selectedTableForColumn) {
       addColumn(selectedTableForColumn, column);

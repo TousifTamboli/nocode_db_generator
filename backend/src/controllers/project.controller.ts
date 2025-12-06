@@ -269,7 +269,7 @@ export const updateSchema = async (req: AuthRequest, res: Response): Promise<voi
   try {
     const { id } = req.params;
     const userId = req.userId;
-    const { tables } = req.body;
+    const { tables, relationships = [] } = req.body;
 
     if (!Array.isArray(tables)) {
       res.status(400).json({
@@ -292,6 +292,11 @@ export const updateSchema = async (req: AuthRequest, res: Response): Promise<voi
 
     // Sync to MySQL if it's a MySQL project
     if (project.databaseType === 'mysql' && project.mysqlConfig) {
+      console.log('📊 Syncing to MySQL...');
+      console.log('📊 Tables to sync:', tables.length);
+      console.log('📊 Relationships to sync:', relationships.length);
+      console.log('📊 Database:', project.databaseName);
+      
       const syncResult = await syncSchemaToMySQL(
         {
           host: project.mysqlConfig.host,
@@ -300,20 +305,24 @@ export const updateSchema = async (req: AuthRequest, res: Response): Promise<voi
           password: project.mysqlConfig.password,
         },
         project.databaseName,
-        tables
+        tables,
+        relationships
       );
 
       if (!syncResult.success) {
-        console.error('MySQL sync failed:', syncResult.message);
-        // Continue to save to MongoDB even if MySQL sync fails
-        // but log the error
+        console.error('❌ MySQL sync failed:', syncResult.message);
+        console.error('❌ Details:', syncResult.details);
       } else {
-        console.log('MySQL sync success:', syncResult.details);
+        console.log('✅ MySQL sync success:', syncResult.details);
       }
+    } else {
+      console.log('⚠️ Skipping MySQL sync - not a MySQL project or no config');
+      console.log('⚠️ Database type:', project.databaseType);
+      console.log('⚠️ Has MySQL config:', !!project.mysqlConfig);
     }
 
-    // Update schema in MongoDB
-    project.schemaData = { tables };
+    // Update schema in MongoDB (includes relationships)
+    project.schemaData = { tables, relationships };
     await project.save();
 
     res.status(200).json({
@@ -328,3 +337,4 @@ export const updateSchema = async (req: AuthRequest, res: Response): Promise<voi
     });
   }
 };
+

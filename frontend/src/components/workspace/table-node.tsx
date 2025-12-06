@@ -20,10 +20,10 @@ interface TableNodeProps {
   selected?: boolean;
 }
 
-// Column Row Component
+// Column Row Component (simplified - no dots inside)
 function ColumnRow({ 
   column, 
-  tableId, 
+  tableId,
   onEdit 
 }: { 
   column: Column; 
@@ -67,9 +67,7 @@ function ColumnRow({
   }, [column, onEdit]);
 
   return (
-    <div
-      className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-800 transition-colors group"
-    >
+    <div className="flex items-center gap-2 px-3 py-1.5 hover:bg-zinc-800/50 transition-colors group">
       {isEditingName ? (
         <div className="flex-1 flex items-center gap-1">
           <Input
@@ -107,19 +105,19 @@ function ColumnRow({
       ) : (
         <>
           <div 
-            className="flex-1 flex items-center gap-2 cursor-pointer"
+            className="flex-1 flex items-center gap-2 cursor-pointer min-w-0"
             onDoubleClick={handleDoubleClick}
             title="Double-click to rename"
           >
-            <span className={`text-xs font-medium ${column.isPrimaryKey ? "text-yellow-400" : "text-zinc-300"}`}>
+            <span className={`text-xs font-medium truncate ${column.isPrimaryKey ? "text-yellow-400" : "text-zinc-300"}`}>
               {column.isPrimaryKey && "🔑 "}
               {column.name}
             </span>
-            <span className="text-xs text-zinc-500">{column.type}</span>
+            <span className="text-xs text-zinc-500 shrink-0">{column.type}</span>
           </div>
           
           {/* Constraint badges */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0">
             {column.isUnique && !column.isPrimaryKey && (
               <span className="text-[9px] px-1 py-0.5 rounded bg-blue-500/20 text-blue-400">UQ</span>
             )}
@@ -131,23 +129,23 @@ function ColumnRow({
             )}
           </div>
           
-          {/* Edit button - visible on hover */}
+          {/* Edit button */}
           <Button
             variant="ghost"
             size="sm"
             onClick={handleEditClick}
-            className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-blue-400 hover:bg-blue-500/20 transition-all"
+            className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-blue-400 hover:bg-blue-500/20 transition-all shrink-0"
             title="Edit column"
           >
             <Pencil className="w-3 h-3" />
           </Button>
           
-          {/* Delete button - visible on hover */}
+          {/* Delete button */}
           <Button
             variant="ghost"
             size="sm"
             onClick={handleDelete}
-            className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400 hover:bg-red-500/20 transition-all"
+            className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400 hover:bg-red-500/20 transition-all shrink-0"
             title="Delete column"
           >
             <Trash2 className="w-3 h-3" />
@@ -200,12 +198,46 @@ function TableNodeComponent({ data, selected }: TableNodeProps) {
     data.onEditColumn(data.tableId, column);
   }, [data]);
 
+  // Calculate handle positions for each column
+  const headerHeight = 44;
+  const columnHeight = 32;
+
   return (
     <div
-      className={`min-w-[280px] rounded-xl bg-zinc-900 border-2 transition-all duration-200 shadow-xl ${
+      className={`min-w-[280px] max-w-[350px] rounded-xl bg-zinc-900 border-2 transition-all duration-200 shadow-xl ${
         selected ? "border-purple-500 shadow-purple-500/20" : "border-zinc-700"
       }`}
     >
+      {/* Connection handles for each column - large, visible, easy to drag */}
+      {data.columns.map((column, index) => (
+        <div key={column.id}>
+          {/* Left handle (target - reference target) */}
+          <Handle
+            type="target"
+            position={Position.Left}
+            id={`${data.tableId}-${column.id}-target`}
+            className="!w-4 !h-4 !bg-purple-500 !border-2 !border-purple-300 hover:!scale-125 !transition-transform"
+            style={{ 
+              top: headerHeight + (index * columnHeight) + (columnHeight / 2),
+              left: -8,
+            }}
+            title={`Connect TO ${column.name}`}
+          />
+          {/* Right handle (source - FK column) */}
+          <Handle
+            type="source"
+            position={Position.Right}
+            id={`${data.tableId}-${column.id}-source`}
+            className="!w-4 !h-4 !bg-cyan-500 !border-2 !border-cyan-300 hover:!scale-125 !transition-transform"
+            style={{ 
+              top: headerHeight + (index * columnHeight) + (columnHeight / 2),
+              right: -8,
+            }}
+            title={`Drag FROM ${column.name} to create FK`}
+          />
+        </div>
+      ))}
+
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-t-[10px]">
         <GripVertical className="w-4 h-4 text-white/70 cursor-grab" />
@@ -240,9 +272,9 @@ function TableNodeComponent({ data, selected }: TableNodeProps) {
       </div>
 
       {/* Columns */}
-      <div className="p-2 space-y-1 min-h-[40px] max-h-[300px] overflow-y-auto">
+      <div className="min-h-[40px] max-h-[300px] overflow-y-auto">
         {data.columns.length === 0 ? (
-          <div className="text-xs text-zinc-500 text-center py-2">
+          <div className="text-xs text-zinc-500 text-center py-4 px-2">
             No columns yet
           </div>
         ) : (
@@ -258,7 +290,7 @@ function TableNodeComponent({ data, selected }: TableNodeProps) {
       </div>
 
       {/* Add Column Button */}
-      <div className="p-2 pt-0">
+      <div className="p-2">
         <Button
           variant="ghost"
           size="sm"
@@ -270,17 +302,14 @@ function TableNodeComponent({ data, selected }: TableNodeProps) {
         </Button>
       </div>
 
-      {/* Connection handles */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        className="w-3 h-3 bg-purple-500 border-2 border-zinc-900"
-      />
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="w-3 h-3 bg-purple-500 border-2 border-zinc-900"
-      />
+      {/* Helper text */}
+      {data.columns.length > 0 && (
+        <div className="px-2 pb-2 text-center">
+          <span className="text-[10px] text-zinc-600">
+            🔵 → 🟣 Drag cyan to purple for FK
+          </span>
+        </div>
+      )}
     </div>
   );
 }

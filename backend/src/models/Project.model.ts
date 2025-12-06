@@ -31,12 +31,20 @@ export interface IProject extends Document {
         type: string;
         isPrimaryKey: boolean;
         isNullable: boolean;
+        isUnique?: boolean;
+        isAutoIncrement?: boolean;
         defaultValue?: string;
-        foreignKey?: {
-          tableId: string;
-          columnId: string;
-        };
+        checkConstraint?: string;
       }>;
+    }>;
+    relationships?: Array<{
+      id: string;
+      sourceTableId: string;
+      sourceColumnId: string;
+      targetTableId: string;
+      targetColumnId: string;
+      onDelete?: string;
+      onUpdate?: string;
     }>;
   };
   createdAt: Date;
@@ -78,6 +86,10 @@ const projectSchema = new Schema<IProject>(
     },
     schemaData: {
       tables: {
+        type: Array,
+        default: [],
+      },
+      relationships: {
         type: Array,
         default: [],
       },

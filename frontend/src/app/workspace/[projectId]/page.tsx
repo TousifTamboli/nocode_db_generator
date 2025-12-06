@@ -38,6 +38,15 @@ interface ProjectData {
         checkConstraint?: string;
       }>;
     }>;
+    relationships?: Array<{
+      id: string;
+      sourceTableId: string;
+      sourceColumnId: string;
+      targetTableId: string;
+      targetColumnId: string;
+      onDelete?: string;
+      onUpdate?: string;
+    }>;
   };
 }
 
@@ -69,7 +78,8 @@ export default function WorkspacePage() {
     addTable, 
     addColumn,
     updateColumn,
-    setTables 
+    setTables,
+    setRelationships
   } = useWorkspaceStore();
 
   // Configure drag sensors
@@ -107,6 +117,10 @@ export default function WorkspacePage() {
           // Load existing tables if any
           if (project.schemaData?.tables) {
             setTables(project.schemaData.tables);
+          }
+          // Load existing relationships if any
+          if (project.schemaData?.relationships) {
+            setRelationships(project.schemaData.relationships as any);
           }
         } else {
           toast.error("Failed to load project");

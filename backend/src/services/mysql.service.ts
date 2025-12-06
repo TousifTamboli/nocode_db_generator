@@ -199,11 +199,23 @@ const generateCreateTableSQL = (table: Table): string => {
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`;
 };
 
-// Sync schema to MySQL - creates/updates tables
+// Relationship interface
+interface Relationship {
+  id: string;
+  sourceTableId: string;
+  sourceColumnId: string;
+  targetTableId: string;
+  targetColumnId: string;
+  onDelete?: 'CASCADE' | 'SET NULL' | 'RESTRICT' | 'NO ACTION';
+  onUpdate?: 'CASCADE' | 'SET NULL' | 'RESTRICT' | 'NO ACTION';
+}
+
+// Sync schema to MySQL with relationships - creates/updates tables and foreign keys
 export const syncSchemaToMySQL = async (
   config: MySQLConfig,
   databaseName: string,
-  tables: Table[]
+  tables: Table[],
+  relationships: Relationship[] = []
 ): Promise<{ success: boolean; message: string; details?: string[] }> => {
   const details: string[] = [];
   
@@ -215,6 +227,9 @@ export const syncSchemaToMySQL = async (
       password: config.password,
       database: databaseName,
     });
+
+    // Disable foreign key checks during schema changes
+    await connection.query('SET FOREIGN_KEY_CHECKS = 0');
 
     // Get existing tables from MySQL
     const [existingTablesResult] = await connection.query('SHOW TABLES');
@@ -238,23 +253,81 @@ export const syncSchemaToMySQL = async (
       const safeName = table.name.replace(/[^a-zA-Z0-9_]/g, '_');
       
       if (existingTables.includes(safeName)) {
-        // Table exists - recreate it (drop and create for simplicity)
-        // In production, you'd want to use ALTER TABLE for better handling
         await connection.query(`DROP TABLE IF EXISTS \`${safeName}\``);
         details.push(`Recreating table: ${safeName}`);
       }
       
       // Create the table
       const createSQL = generateCreateTableSQL(table);
+      console.log(`🔧 SQL for ${safeName}:`, createSQL);
       await connection.query(createSQL);
       details.push(`Created table: ${safeName} with ${table.columns.length} columns`);
     }
+
+    // Add foreign key constraints
+    console.log('🔗 Processing relationships:', relationships.length);
+    
+    for (const rel of relationships) {
+      console.log('🔗 Processing relationship:', rel);
+      
+      // Find source and target tables/columns
+      const sourceTable = tables.find(t => t.id === rel.sourceTableId);
+      const targetTable = tables.find(t => t.id === rel.targetTableId);
+      
+      if (!sourceTable || !targetTable) {
+        console.log('❌ Table not found for relationship');
+        continue;
+      }
+      
+      const sourceColumn = sourceTable.columns.find(c => c.id === rel.sourceColumnId);
+      const targetColumn = targetTable.columns.find(c => c.id === rel.targetColumnId);
+      
+      if (!sourceColumn || !targetColumn) {
+        console.log('❌ Column not found for relationship');
+        console.log('Source columns:', sourceTable.columns.map(c => c.id));
+        console.log('Target columns:', targetTable.columns.map(c => c.id));
+        continue;
+      }
+      
+      const safeSourceTable = sourceTable.name.replace(/[^a-zA-Z0-9_]/g, '_');
+      const safeTargetTable = targetTable.name.replace(/[^a-zA-Z0-9_]/g, '_');
+      const safeSourceColumn = sourceColumn.name.replace(/[^a-zA-Z0-9_]/g, '_');
+      const safeTargetColumn = targetColumn.name.replace(/[^a-zA-Z0-9_]/g, '_');
+      
+      const constraintName = `fk_${safeSourceTable}_${safeSourceColumn}`;
+      const onDelete = rel.onDelete || 'CASCADE';
+      const onUpdate = rel.onUpdate || 'CASCADE';
+      
+      const alterSQL = `
+        ALTER TABLE \`${safeSourceTable}\`
+        ADD CONSTRAINT \`${constraintName}\`
+        FOREIGN KEY (\`${safeSourceColumn}\`)
+        REFERENCES \`${safeTargetTable}\`(\`${safeTargetColumn}\`)
+        ON DELETE ${onDelete}
+        ON UPDATE ${onUpdate}
+      `;
+      
+      console.log('🔧 FK SQL:', alterSQL);
+      
+      try {
+        await connection.query(alterSQL);
+        details.push(`Added FK: ${safeSourceTable}.${safeSourceColumn} → ${safeTargetTable}.${safeTargetColumn}`);
+        console.log('✅ FK created successfully');
+      } catch (fkError) {
+        const err = fkError as Error;
+        details.push(`FK failed: ${safeSourceTable}.${safeSourceColumn} - ${err.message}`);
+        console.log('❌ FK creation failed:', err.message);
+      }
+    }
+
+    // Re-enable foreign key checks
+    await connection.query('SET FOREIGN_KEY_CHECKS = 1');
 
     await connection.end();
 
     return {
       success: true,
-      message: `Synced ${tables.length} tables to MySQL`,
+      message: `Synced ${tables.length} tables and ${relationships.length} relationships to MySQL`,
       details,
     };
   } catch (error) {

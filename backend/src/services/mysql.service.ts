@@ -46,6 +46,32 @@ export const testMySQLConnection = async (config: MySQLConfig): Promise<{ succes
   }
 };
 
+// Execute a MySQL query
+export const executeMySQLQuery = async (
+  config: MySQLConfig,
+  databaseName: string,
+  query: string
+): Promise<{ success: boolean; message: string; result?: unknown }> => {
+  try {
+    const connection = await mysql.createConnection({
+      host: config.host,
+      port: config.port,
+      user: config.user,
+      password: config.password,
+      database: databaseName,
+    });
+    
+    const [result] = await connection.query(query);
+    await connection.end();
+    
+    return { success: true, message: 'Query executed successfully', result };
+  } catch (error) {
+    const err = error as Error;
+    console.error('MySQL query error:', err.message);
+    return { success: false, message: err.message };
+  }
+};
+
 // Create a new database in MySQL
 export const createMySQLDatabase = async (
   config: MySQLConfig,
@@ -100,31 +126,6 @@ export const listMySQLDatabases = async (config: MySQLConfig): Promise<{ success
     const databases = (rows as Array<{ Database: string }>).map(row => row.Database);
     
     return { success: true, databases };
-  } catch (error) {
-    const err = error as Error;
-    return { success: false, message: err.message };
-  }
-};
-
-// Execute SQL query on a specific database
-export const executeMySQLQuery = async (
-  config: MySQLConfig,
-  databaseName: string,
-  query: string
-): Promise<{ success: boolean; result?: unknown; message?: string }> => {
-  try {
-    const connection = await mysql.createConnection({
-      host: config.host,
-      port: config.port,
-      user: config.user,
-      password: config.password,
-      database: databaseName,
-    });
-    
-    const [result] = await connection.query(query);
-    await connection.end();
-    
-    return { success: true, result };
   } catch (error) {
     const err = error as Error;
     return { success: false, message: err.message };

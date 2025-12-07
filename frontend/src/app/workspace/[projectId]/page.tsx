@@ -8,12 +8,14 @@ import { Table2, Loader2 } from "lucide-react";
 import { ReactFlowProvider } from "@xyflow/react";
 
 import { useAuthStore } from "@/stores/auth-store";
-import { useWorkspaceStore, Column } from "@/stores/workspace-store";
+import { useWorkspaceStore, Column, Table } from "@/stores/workspace-store";
 import { Sidebar } from "@/components/workspace/sidebar";
 import { Canvas } from "@/components/workspace/canvas";
 import { CreateTableDialog } from "@/components/workspace/create-table-dialog";
 import { AddColumnDialog } from "@/components/workspace/add-column-dialog";
 import { EditColumnDialog } from "@/components/workspace/edit-column-dialog";
+import { DataPanel } from "@/components/workspace/data-panel";
+import { DataEditor } from "@/components/workspace/data-editor";
 import api from "@/lib/api";
 
 interface ProjectData {
@@ -66,6 +68,9 @@ export default function WorkspacePage() {
   const [showEditColumnDialog, setShowEditColumnDialog] = useState(false);
   const [editingColumn, setEditingColumn] = useState<Column | null>(null);
   const [editingTableId, setEditingTableId] = useState<string | null>(null);
+  
+  // Data panel state
+  const [selectedDataTable, setSelectedDataTable] = useState<Table | null>(null);
   
   const canvasRef = useRef<HTMLDivElement>(null);
 
@@ -253,7 +258,21 @@ export default function WorkspacePage() {
             <Canvas onAddColumn={handleAddColumn} onEditColumn={handleEditColumn} />
           </ReactFlowProvider>
         </div>
+
+        {/* Data Panel (Right sidebar) */}
+        <DataPanel onTableSelect={(table) => {
+          setSelectedDataTable(table);
+        }} />
       </div>
+
+      {/* Data Editor (Full screen overlay) */}
+      {selectedDataTable && (
+        <DataEditor
+          table={selectedDataTable}
+          projectId={projectId}
+          onClose={() => setSelectedDataTable(null)}
+        />
+      )}
 
       {/* Drag overlay */}
       <DragOverlay>

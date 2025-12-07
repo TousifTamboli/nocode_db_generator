@@ -6,6 +6,7 @@ import { Server } from 'socket.io';
 import connectDB from './config/database';
 import authRoutes from './routes/auth.routes';
 import projectRoutes from './routes/project.routes';
+import dataRoutes from './routes/data.routes';
 
 // Load environment variables
 dotenv.config();
@@ -33,6 +34,7 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
+app.use('/api/data', dataRoutes);
 
 // Health check route
 app.get('/api/health', (req, res) => {

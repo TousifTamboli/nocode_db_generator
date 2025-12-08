@@ -190,13 +190,31 @@ export function DataEditor({ table, projectId, onClose }: DataEditorProps) {
     setIsSaving(true);
     try {
       const rowData: Record<string, unknown> = {};
+      
+      // Collect all non-auto-increment columns
       table.columns.forEach(col => {
-        if (!col.isAutoIncrement && row[col.name] !== "(auto)" && row[col.name] !== null) {
+        if (!col.isAutoIncrement && row[col.name] !== "(auto)") {
+          // Include the value even if it's null (MySQL will handle defaults)
           rowData[col.name] = row[col.name];
         }
       });
 
-      await api.post(`/data/${projectId}/${table.name}`, { rowData });
+      // Check if we have any data to insert
+      // If table has only auto-increment columns, we can still insert with empty columns
+      const hasOnlyAutoIncrement = table.columns.every(col => col.isAutoIncrement);
+      
+      if (Object.keys(rowData).length === 0 && !hasOnlyAutoIncrement) {
+        // Check if all columns have null values - that's okay, we'll send them
+        const nonAIColumns = table.columns.filter(col => !col.isAutoIncrement);
+        if (nonAIColumns.length > 0) {
+          // Include null values explicitly
+          nonAIColumns.forEach(col => {
+            rowData[col.name] = row[col.name] ?? null;
+          });
+        }
+      }
+
+      await api.post(`/data/${projectId}/${table.name}`, { rowData, allowEmpty: hasOnlyAutoIncrement });
       toast.success("Row saved successfully");
       
       // Refresh to get the auto-generated ID

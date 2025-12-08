@@ -87,16 +87,11 @@ export const getTableData = async (req: AuthRequest, res: Response): Promise<voi
 export const insertRow = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { projectId, tableName } = req.params;
-    const { rowData } = req.body;
+    const { rowData, allowEmpty } = req.body;
     const userId = req.userId;
 
     if (!userId) {
       res.status(401).json({ success: false, message: 'Unauthorized' });
-      return;
-    }
-
-    if (!rowData || Object.keys(rowData).length === 0) {
-      res.status(400).json({ success: false, message: 'No data provided' });
       return;
     }
 
@@ -107,12 +102,23 @@ export const insertRow = async (req: AuthRequest, res: Response): Promise<void> 
     }
 
     const safeTableName = tableName.replace(/[^a-zA-Z0-9_]/g, '_');
-    
-    // Build INSERT query with escaped values
-    const columns = Object.keys(rowData).map(col => `\`${col.replace(/[^a-zA-Z0-9_]/g, '_')}\``);
-    const values = Object.values(rowData).map(val => escapeValue(val));
+    let query: string;
 
-    const query = `INSERT INTO \`${safeTableName}\` (${columns.join(', ')}) VALUES (${values.join(', ')})`;
+    // Check if we have data to insert
+    if (!rowData || Object.keys(rowData).length === 0) {
+      if (allowEmpty) {
+        // Insert with default values (for tables with only auto-increment columns)
+        query = `INSERT INTO \`${safeTableName}\` () VALUES ()`;
+      } else {
+        res.status(400).json({ success: false, message: 'No data provided' });
+        return;
+      }
+    } else {
+      // Build INSERT query with escaped values
+      const columns = Object.keys(rowData).map(col => `\`${col.replace(/[^a-zA-Z0-9_]/g, '_')}\``);
+      const values = Object.values(rowData).map(val => escapeValue(val));
+      query = `INSERT INTO \`${safeTableName}\` (${columns.join(', ')}) VALUES (${values.join(', ')})`;
+    }
     
     console.log('📝 Insert query:', query);
 

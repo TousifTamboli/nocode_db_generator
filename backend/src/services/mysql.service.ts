@@ -35,10 +35,10 @@ export const testMySQLConnection = async (config: MySQLConfig): Promise<{ succes
       user: config.user,
       password: config.password,
     });
-    
+
     await connection.ping();
     await connection.end();
-    
+
     return { success: true, message: 'Connection successful' };
   } catch (error) {
     const err = error as Error;
@@ -60,10 +60,10 @@ export const executeMySQLQuery = async (
       password: config.password,
       database: databaseName,
     });
-    
+
     const [result] = await connection.query(query);
     await connection.end();
-    
+
     return { success: true, message: 'Query executed successfully', result };
   } catch (error) {
     const err = error as Error;
@@ -84,25 +84,25 @@ export const createMySQLDatabase = async (
       user: config.user,
       password: config.password,
     });
-    
+
     // Sanitize database name to prevent SQL injection
     const safeName = databaseName.replace(/[^a-zA-Z0-9_]/g, '_');
-    
+
     // Check if database already exists
     const [rows] = await connection.query(
       `SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = ?`,
       [safeName]
     );
-    
+
     if (Array.isArray(rows) && rows.length > 0) {
       await connection.end();
       return { success: false, message: `Database '${safeName}' already exists` };
     }
-    
+
     // Create the database
     await connection.query(`CREATE DATABASE \`${safeName}\``);
     await connection.end();
-    
+
     return { success: true, message: `Database '${safeName}' created successfully` };
   } catch (error) {
     const err = error as Error;
@@ -119,12 +119,12 @@ export const listMySQLDatabases = async (config: MySQLConfig): Promise<{ success
       user: config.user,
       password: config.password,
     });
-    
+
     const [rows] = await connection.query('SHOW DATABASES');
     await connection.end();
-    
+
     const databases = (rows as Array<{ Database: string }>).map(row => row.Database);
-    
+
     return { success: true, databases };
   } catch (error) {
     const err = error as Error;
@@ -135,7 +135,7 @@ export const listMySQLDatabases = async (config: MySQLConfig): Promise<{ success
 // Generate CREATE TABLE SQL from table definition
 const generateCreateTableSQL = (table: Table): string => {
   const safeName = table.name.replace(/[^a-zA-Z0-9_]/g, '_');
-  
+
   if (table.columns.length === 0) {
     // MySQL requires at least one column, so create with a placeholder
     return `CREATE TABLE IF NOT EXISTS \`${safeName}\` (
@@ -149,17 +149,17 @@ const generateCreateTableSQL = (table: Table): string => {
   table.columns.forEach(col => {
     const colName = col.name.replace(/[^a-zA-Z0-9_]/g, '_');
     let def = `\`${colName}\` ${col.type}`;
-    
+
     // NOT NULL constraint
     if (!col.isNullable) {
       def += ' NOT NULL';
     }
-    
+
     // AUTO_INCREMENT (only for INT types)
     if (col.isAutoIncrement && col.type.toUpperCase().includes('INT')) {
       def += ' AUTO_INCREMENT';
     }
-    
+
     // DEFAULT value
     if (col.defaultValue && !col.isAutoIncrement) {
       const upperDefault = col.defaultValue.toUpperCase().trim();
@@ -173,19 +173,19 @@ const generateCreateTableSQL = (table: Table): string => {
         def += ` DEFAULT '${col.defaultValue.replace(/'/g, "''")}'`;
       }
     }
-    
+
     // UNIQUE constraint (inline for single column)
     if (col.isUnique && !col.isPrimaryKey) {
       def += ' UNIQUE';
     }
-    
+
     columnDefs.push(def);
-    
+
     // PRIMARY KEY constraint
     if (col.isPrimaryKey) {
       constraints.push(`PRIMARY KEY (\`${colName}\`)`);
     }
-    
+
     // CHECK constraint (MySQL 8.0+)
     if (col.checkConstraint) {
       const constraintName = `chk_${safeName}_${colName}`;
@@ -219,7 +219,7 @@ export const syncSchemaToMySQL = async (
   relationships: Relationship[] = []
 ): Promise<{ success: boolean; message: string; details?: string[] }> => {
   const details: string[] = [];
-  
+
   try {
     const connection = await mysql.createConnection({
       host: config.host,
@@ -252,12 +252,12 @@ export const syncSchemaToMySQL = async (
     // Create or update tables
     for (const table of tables) {
       const safeName = table.name.replace(/[^a-zA-Z0-9_]/g, '_');
-      
+
       if (existingTables.includes(safeName)) {
         await connection.query(`DROP TABLE IF EXISTS \`${safeName}\``);
         details.push(`Recreating table: ${safeName}`);
       }
-      
+
       // Create the table
       const createSQL = generateCreateTableSQL(table);
       console.log(`🔧 SQL for ${safeName}:`, createSQL);
@@ -267,38 +267,38 @@ export const syncSchemaToMySQL = async (
 
     // Add foreign key constraints
     console.log('🔗 Processing relationships:', relationships.length);
-    
+
     for (const rel of relationships) {
       console.log('🔗 Processing relationship:', rel);
-      
+
       // Find source and target tables/columns
       const sourceTable = tables.find(t => t.id === rel.sourceTableId);
       const targetTable = tables.find(t => t.id === rel.targetTableId);
-      
+
       if (!sourceTable || !targetTable) {
         console.log('❌ Table not found for relationship');
         continue;
       }
-      
+
       const sourceColumn = sourceTable.columns.find(c => c.id === rel.sourceColumnId);
       const targetColumn = targetTable.columns.find(c => c.id === rel.targetColumnId);
-      
+
       if (!sourceColumn || !targetColumn) {
         console.log('❌ Column not found for relationship');
         console.log('Source columns:', sourceTable.columns.map(c => c.id));
         console.log('Target columns:', targetTable.columns.map(c => c.id));
         continue;
       }
-      
+
       const safeSourceTable = sourceTable.name.replace(/[^a-zA-Z0-9_]/g, '_');
       const safeTargetTable = targetTable.name.replace(/[^a-zA-Z0-9_]/g, '_');
       const safeSourceColumn = sourceColumn.name.replace(/[^a-zA-Z0-9_]/g, '_');
       const safeTargetColumn = targetColumn.name.replace(/[^a-zA-Z0-9_]/g, '_');
-      
+
       const constraintName = `fk_${safeSourceTable}_${safeSourceColumn}`;
       const onDelete = rel.onDelete || 'CASCADE';
       const onUpdate = rel.onUpdate || 'CASCADE';
-      
+
       const alterSQL = `
         ALTER TABLE \`${safeSourceTable}\`
         ADD CONSTRAINT \`${constraintName}\`
@@ -307,9 +307,9 @@ export const syncSchemaToMySQL = async (
         ON DELETE ${onDelete}
         ON UPDATE ${onUpdate}
       `;
-      
+
       console.log('🔧 FK SQL:', alterSQL);
-      
+
       try {
         await connection.query(alterSQL);
         details.push(`Added FK: ${safeSourceTable}.${safeSourceColumn} → ${safeTargetTable}.${safeTargetColumn}`);
@@ -332,10 +332,13 @@ export const syncSchemaToMySQL = async (
       details,
     };
   } catch (error) {
-    const err = error as Error;
+    const err = error as Error & { code?: string; errno?: number };
+    console.error('❌ MySQL sync error:', err);
+    console.error('❌ Error code:', err.code);
+    console.error('❌ Error message:', err.message);
     return {
       success: false,
-      message: `MySQL sync failed: ${err.message}`,
+      message: `MySQL sync failed: ${err.code || 'UNKNOWN'} - ${err.message || 'No error message'}`,
       details,
     };
   }
